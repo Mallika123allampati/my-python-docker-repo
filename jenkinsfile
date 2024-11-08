@@ -1,0 +1,43 @@
+pipeline {
+    agent any
+    environment {
+        registry = "166914330834.dkr.ecr.ap-south-1.amazonaws.com/my-docker-repo"
+    }
+
+    stages {
+        stage('GIT-CHECKOUT-SCM') {
+            steps {
+                checkout scmGit(branches: [[name: '*/master']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/mmbabu0705/my-python-docker-repo.git']])
+            }
+        }
+        stage('Build Docker Image') {
+            steps {
+                 script {
+                    dockerImage = docker.build registry
+				}   
+            }
+        }
+        stage('Push Docker image into Amazon ECR') {
+            steps {
+             script {
+                  sh 'aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 166914330834.dkr.ecr.ap-south-1.amazonaws.com'
+				  sh 'docker push 166914330834.dkr.ecr.ap-south-1.amazonaws.com/my-docker-repo:latest'
+				}   
+            }
+        }
+           // stopping previous Docker containers for docker clean
+        stage('stop-previous-containers') {
+            steps {
+                sh 'docker ps -f name=mypythonContainer -q | xargs --no-run-if-empty docker container stop'
+                sh 'docker container ls -a -fname=mypythonContainer -q | xargs -r docker container rm'
+            }
+        }
+        stage('Docker RUN') {
+            steps {
+             script {
+                 sh 'docker run -d -p 8096:5000 --rm --name mypythonContainer 166914330834.dkr.ecr.ap-south-1.amazonaws.com/my-docker-repo:latest'
+                 }
+            }
+        }
+    }
+}
